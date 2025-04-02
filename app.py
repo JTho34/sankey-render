@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html
+from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
 import pandas as pd
 import numpy as np
@@ -15,15 +15,55 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server  # Nécessaire pour le déploiement sur Render - IMPORTANT: NE PAS MODIFIER CETTE LIGNE
 
 # Charger le fichier CSV d'exemple
-SAMPLE_DATA_PATH = 'gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+SAMPLE_DATA_PATH = os.path.join(current_dir, 'gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv')
+print(f"Tentative de chargement du fichier d'exemple depuis: {SAMPLE_DATA_PATH}")
+print(f"Le fichier existe? {os.path.exists(SAMPLE_DATA_PATH)}")
+
+# Si le chemin absolu ne fonctionne pas, essayons différents emplacements
 sample_df = None
-try:
-    # Chargez le fichier d'exemple préchargé
-    sample_df = pd.read_csv(SAMPLE_DATA_PATH)
-    print(f"Fichier d'exemple chargé avec succès: {SAMPLE_DATA_PATH}")
-    print(f"Dimensions: {sample_df.shape[0]} lignes x {sample_df.shape[1]} colonnes")
-except Exception as e:
-    print(f"Impossible de charger le fichier d'exemple: {e}")
+possible_paths = [
+    SAMPLE_DATA_PATH,
+    'gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv',
+    '../gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv',
+    '/app/gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv',
+    os.path.join(os.path.dirname(current_dir), 'gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv')
+]
+
+for path in possible_paths:
+    try:
+        print(f"Tentative de chargement depuis: {path}")
+        if os.path.exists(path):
+            print(f"Le fichier existe à {path}")
+            sample_df = pd.read_csv(path)
+            print(f"Fichier d'exemple chargé avec succès: {path}")
+            print(f"Dimensions: {sample_df.shape[0]} lignes x {sample_df.shape[1]} colonnes")
+            SAMPLE_DATA_PATH = path
+            break
+        else:
+            print(f"Le fichier n'existe pas à {path}")
+    except Exception as e:
+        print(f"Erreur lors du chargement de {path}: {e}")
+
+if sample_df is None:
+    print("Impossible de charger le fichier d'exemple. Aucun chemin fonctionnel trouvé.")
+    
+    # Essayons de lister les fichiers dans le répertoire courant pour diagnostic
+    print("Fichiers dans le répertoire courant:")
+    try:
+        for f in os.listdir(current_dir):
+            print(f" - {f}")
+    except Exception as e:
+        print(f"Erreur lors du listage des fichiers: {e}")
+    
+    # Essayons de lister les fichiers dans le répertoire parent
+    print("Fichiers dans le répertoire parent:")
+    try:
+        parent_dir = os.path.dirname(current_dir)
+        for f in os.listdir(parent_dir):
+            print(f" - {f}")
+    except Exception as e:
+        print(f"Erreur lors du listage des fichiers: {e}")
 
 def create_all_sequences_sankey(df, max_species_in_sequence=5):
     """
@@ -224,7 +264,20 @@ def build_sankey_diagram(links, title):
     
     return fig
 
-# Définir la mise en page de l'application
+# Définir la mise en page de l'application avec les données initiales
+initial_data = None
+initial_info = None
+
+# Si les données d'exemple sont disponibles, préparons-les pour l'affichage initial
+if sample_df is not None:
+    initial_data = sample_df.to_json(date_format='iso', orient='split')
+    initial_info = html.Div([
+        html.H5(f'Fichier d\'exemple chargé automatiquement', style={'color': 'green'}),
+        html.Hr(),
+        html.Div(f'Données chargées avec succès. Dimensions: {sample_df.shape[0]}x{sample_df.shape[1]}'),
+        html.Div('Colonnes: ' + ', '.join(sample_df.columns[:10]) + ('...' if len(sample_df.columns) > 10 else '')),
+    ], style={'marginTop': '15px', 'backgroundColor': '#f1f8e9', 'padding': '10px', 'borderRadius': '5px'})
+
 app.layout = html.Div([
     html.H1("Visualisation des Diagrammes de Sankey"),
     
@@ -256,7 +309,7 @@ app.layout = html.Div([
             ),
         ], style={'display': 'flex', 'alignItems': 'center'}),
         html.Div(id='output-data-upload'),
-        html.Div(id='sample-data-info'),
+        html.Div(id='sample-data-info', children=initial_info),
     ]),
     
     html.Div([
@@ -297,8 +350,8 @@ app.layout = html.Div([
         dcc.Graph(id='sankey-random-sites')
     ]),
     
-    # Div invisible pour stocker les données
-    html.Div(id='stored-data', style={'display': 'none'})
+    # Div invisible pour stocker les données, avec données initiales si disponibles
+    html.Div(id='stored-data', style={'display': 'none'}, children=initial_data)
 ])
 
 # Fonction pour parser le contenu du fichier chargé
@@ -347,42 +400,87 @@ def update_output(contents, filename):
     [Input('use-sample-button', 'n_clicks')]
 )
 def use_sample_data(n_clicks):
-    if n_clicks > 0 and sample_df is not None:
+    if n_clicks > 0:
+        # Essayons de charger le fichier même si ce n'était pas possible au démarrage
+        if sample_df is not None:
+            # Utiliser le dataframe déjà chargé
+            df = sample_df
+        else:
+            # Essayer de charger à nouveau le fichier
+            try:
+                print("Tentative de re-chargement du fichier CSV...")
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        print(f"Re-chargement depuis: {path}")
+                        df = pd.read_csv(path)
+                        print(f"Re-chargement réussi!")
+                        break
+                else:
+                    # Si aucun chemin ne fonctionne, afficher un message d'erreur
+                    return None, html.Div([
+                        html.H5('Erreur', style={'color': 'red'}),
+                        html.P('Impossible de charger le fichier d\'exemple. Veuillez télécharger manuellement un fichier CSV.')
+                    ])
+            except Exception as e:
+                print(f"Erreur lors du re-chargement: {e}")
+                return None, html.Div([
+                    html.H5('Erreur', style={'color': 'red'}),
+                    html.P(f'Exception lors du chargement du fichier: {str(e)}')
+                ])
+        
+        # Afficher les informations sur les données
         return (
-            sample_df.to_json(date_format='iso', orient='split'),
+            df.to_json(date_format='iso', orient='split'),
             html.Div([
-                html.H5(f'Fichier d\'exemple utilisé: {SAMPLE_DATA_PATH}'),
+                html.H5(f'Fichier d\'exemple utilisé', style={'color': 'green'}),
                 html.Hr(),
-                html.Div(f'Données chargées avec succès. Dimensions: {sample_df.shape[0]}x{sample_df.shape[1]}'),
-                html.Div('Colonnes: ' + ', '.join(sample_df.columns[:10]) + ('...' if len(sample_df.columns) > 10 else '')),
+                html.Div(f'Données chargées avec succès. Dimensions: {df.shape[0]}x{df.shape[1]}'),
+                html.Div('Colonnes: ' + ', '.join(df.columns[:10]) + ('...' if len(df.columns) > 10 else '')),
             ], style={'marginTop': '15px', 'backgroundColor': '#f1f8e9', 'padding': '10px', 'borderRadius': '5px'})
         )
+    
     return None, html.Div('')
 
 # Callback pour générer les diagrammes
 @app.callback(
     [Output('sankey-all-sequences', 'figure'),
      Output('sankey-random-sites', 'figure')],
-    [Input('generate-button', 'n_clicks')],
-    [State('stored-data', 'children'),
-     State('max-species-slider', 'value'),
+    [Input('generate-button', 'n_clicks'),
+     # Ajouter un déclencheur au chargement de la page
+     Input('stored-data', 'children')],
+    [State('max-species-slider', 'value'),
      State('num-sites-slider', 'value')]
 )
 def update_graphs(n_clicks, stored_data, max_species, num_sites):
-    if n_clicks == 0 or stored_data is None:
+    ctx = callback_context
+    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if stored_data is None:
         # Retourner des graphiques vides
         empty_fig = go.Figure()
         empty_fig.update_layout(title="Chargez vos données et cliquez sur 'Générer'")
         return empty_fig, empty_fig
     
-    # Charger les données depuis le stockage
-    df = pd.read_json(stored_data, orient='split')
+    # Si le déclencheur est le bouton ou si les données sont disponibles au chargement
+    if trigger_id == 'generate-button' or (trigger_id == 'stored-data' and initial_data is not None):
+        # Charger les données depuis le stockage
+        df = pd.read_json(stored_data, orient='split')
+        
+        # Générer les diagrammes
+        try:
+            fig1 = create_all_sequences_sankey(df, max_species_in_sequence=max_species)
+            fig2 = create_random_sites_sankey(df, num_sites=num_sites, max_species_in_sequence=max_species)
+            return fig1, fig2
+        except Exception as e:
+            print(f"Erreur lors de la génération des diagrammes: {e}")
+            error_fig = go.Figure()
+            error_fig.update_layout(title=f"Erreur: {str(e)}")
+            return error_fig, error_fig
     
-    # Générer les diagrammes
-    fig1 = create_all_sequences_sankey(df, max_species_in_sequence=max_species)
-    fig2 = create_random_sites_sankey(df, num_sites=num_sites, max_species_in_sequence=max_species)
-    
-    return fig1, fig2
+    # Si c'est juste le chargement initial sans données
+    empty_fig = go.Figure()
+    empty_fig.update_layout(title="Chargez vos données et cliquez sur 'Générer'")
+    return empty_fig, empty_fig
 
 # Point d'entrée pour Render
 if __name__ == '__main__':
