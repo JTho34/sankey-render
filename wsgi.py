@@ -1,7 +1,7 @@
-from app import server
+from app import server as application
 
-# C'est ce fichier que gunicorn va chercher
-# Nous exposons simplement la variable server de app.py
+# Simple fichier wsgi pour Gunicorn
+# La variable 'application' est ce que Gunicorn va chercher
 
 if __name__ == "__main__":
-    server.run() 
+    application.run()
