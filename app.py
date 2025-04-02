@@ -344,3 +344,7 @@ def update_graphs(n_clicks, stored_data, max_species, num_sites):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8050))
     app.run_server(debug=False, host='0.0.0.0', port=port)
+
+# S'assurer que la variable server est accessible
+# Cette ligne est nécessaire pour que gunicorn trouve l'objet server
+server = app.server
