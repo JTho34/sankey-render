@@ -1,0 +1,63 @@
+# Application de Visualisation Sankey pour données écologiques
+
+Cette application web permet de créer des diagrammes de Sankey interactifs à partir de données écologiques. 
+Elle est conçue pour visualiser les séquences d'espèces dans différents sites et répétitions.
+
+## Déploiement sur Render
+
+### Prérequis
+- Un compte sur [Render](https://render.com)
+- Les fichiers de ce dépôt (app.py, requirements.txt, Procfile)
+
+### Étapes de déploiement
+
+1. **Créer un nouveau service Web sur Render**
+   - Connectez-vous à votre compte Render
+   - Cliquez sur "New" puis "Web Service"
+   - Connectez votre dépôt GitHub ou téléchargez directement les fichiers
+
+2. **Configuration du service**
+   - Nom : Choisissez un nom pour votre application (ex: sankey-visualisation)
+   - Runtime : Python
+   - Build Command : `pip install -r requirements.txt`
+   - Start Command : Laissez vide (le Procfile sera utilisé automatiquement)
+   - Plan : Choisissez le plan qui convient (Free pour les tests)
+
+3. **Déploiement**
+   - Cliquez sur "Create Web Service"
+   - Attendez que le déploiement soit terminé
+   - Votre application sera disponible à l'URL fournie par Render
+
+## Utilisation de l'application
+
+1. **Charger vos données**
+   - Cliquez sur "Choisir un fichier" ou glissez-déposez votre fichier CSV
+   - Les données doivent contenir des colonnes commençant par "SP" pour les espèces
+   - Elles doivent aussi avoir des colonnes "sample_index" et "sample_num"
+
+2. **Ajuster les paramètres**
+   - Définissez le nombre maximum d'espèces à afficher par séquence
+   - Choisissez le nombre de sites à inclure pour le second diagramme
+
+3. **Générer les visualisations**
+   - Cliquez sur "Générer les diagrammes"
+   - Explorez les visualisations interactives
+   - Utilisez les boutons pour zoomer ou réinitialiser la vue
+
+## Structure des données attendue
+
+Le fichier CSV doit contenir les colonnes suivantes :
+- `sample_index` : Identifiant du site
+- `sample_num` : Numéro de répétition
+- Plusieurs colonnes commençant par `SP` qui contiennent les abondances des espèces
+
+## Développement local
+
+Pour exécuter l'application localement :
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+L'application sera disponible à l'adresse [http://127.0.0.1:8050/](http://127.0.0.1:8050/)
