@@ -14,6 +14,17 @@ import io
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server  # Nécessaire pour le déploiement sur Render - IMPORTANT: NE PAS MODIFIER CETTE LIGNE
 
+# Charger le fichier CSV d'exemple
+SAMPLE_DATA_PATH = 'gpt2_mdm_median_90ep_last_trained_30inf_batch8_expanded.csv'
+sample_df = None
+try:
+    # Chargez le fichier d'exemple préchargé
+    sample_df = pd.read_csv(SAMPLE_DATA_PATH)
+    print(f"Fichier d'exemple chargé avec succès: {SAMPLE_DATA_PATH}")
+    print(f"Dimensions: {sample_df.shape[0]} lignes x {sample_df.shape[1]} colonnes")
+except Exception as e:
+    print(f"Impossible de charger le fichier d'exemple: {e}")
+
 def create_all_sequences_sankey(df, max_species_in_sequence=5):
     """
     Crée un diagramme de Sankey pour toutes les séquences de tous les échantillons.
@@ -218,26 +229,34 @@ app.layout = html.Div([
     html.H1("Visualisation des Diagrammes de Sankey"),
     
     html.Div([
-        html.H3("Charger vos données"),
-        dcc.Upload(
-            id='upload-data',
-            children=html.Div([
-                'Glissez-déposez ou ',
-                html.A('sélectionnez un fichier CSV')
-            ]),
-            style={
-                'width': '100%',
-                'height': '60px',
-                'lineHeight': '60px',
-                'borderWidth': '1px',
-                'borderStyle': 'dashed',
-                'borderRadius': '5px',
-                'textAlign': 'center',
-                'margin': '10px'
-            },
-            multiple=False
-        ),
+        html.H3("Données"),
+        html.Div([
+            html.Button('Utiliser le fichier d\'exemple préchargé', 
+                       id='use-sample-button', 
+                       n_clicks=0,
+                       style={'marginRight': '20px', 'backgroundColor': '#4CAF50', 'color': 'white', 'border': 'none', 'padding': '10px 20px'}),
+            html.Div('ou', style={'marginRight': '20px', 'display': 'inline-block'}),
+            dcc.Upload(
+                id='upload-data',
+                children=html.Div([
+                    'Glissez-déposez ou ',
+                    html.A('sélectionnez un autre fichier CSV')
+                ]),
+                style={
+                    'width': '60%',
+                    'height': '60px',
+                    'lineHeight': '60px',
+                    'borderWidth': '1px',
+                    'borderStyle': 'dashed',
+                    'borderRadius': '5px',
+                    'textAlign': 'center',
+                    'display': 'inline-block'
+                },
+                multiple=False
+            ),
+        ], style={'display': 'flex', 'alignItems': 'center'}),
         html.Div(id='output-data-upload'),
+        html.Div(id='sample-data-info'),
     ]),
     
     html.Div([
@@ -262,7 +281,10 @@ app.layout = html.Div([
             marks={i: str(i) for i in range(5, 31, 5)},
         ),
         
-        html.Button('Générer les diagrammes', id='generate-button', n_clicks=0)
+        html.Button('Générer les diagrammes', 
+                   id='generate-button', 
+                   n_clicks=0,
+                   style={'backgroundColor': '#008CBA', 'color': 'white', 'border': 'none', 'padding': '10px 20px', 'marginTop': '20px'})
     ], style={'margin': '20px'}),
     
     html.Div([
@@ -273,7 +295,10 @@ app.layout = html.Div([
     html.Div([
         html.H3("Diagramme 2: Sites aléatoires"),
         dcc.Graph(id='sankey-random-sites')
-    ])
+    ]),
+    
+    # Div invisible pour stocker les données
+    html.Div(id='stored-data', style={'display': 'none'})
 ])
 
 # Fonction pour parser le contenu du fichier chargé
@@ -313,7 +338,26 @@ def parse_contents(contents, filename):
 def update_output(contents, filename):
     if contents is not None:
         return parse_contents(contents, filename)
-    return html.Div('Aucun fichier chargé')
+    return html.Div('')
+
+# Callback pour utiliser l'exemple
+@app.callback(
+    [Output('stored-data', 'children'),
+     Output('sample-data-info', 'children')],
+    [Input('use-sample-button', 'n_clicks')]
+)
+def use_sample_data(n_clicks):
+    if n_clicks > 0 and sample_df is not None:
+        return (
+            sample_df.to_json(date_format='iso', orient='split'),
+            html.Div([
+                html.H5(f'Fichier d\'exemple utilisé: {SAMPLE_DATA_PATH}'),
+                html.Hr(),
+                html.Div(f'Données chargées avec succès. Dimensions: {sample_df.shape[0]}x{sample_df.shape[1]}'),
+                html.Div('Colonnes: ' + ', '.join(sample_df.columns[:10]) + ('...' if len(sample_df.columns) > 10 else '')),
+            ], style={'marginTop': '15px', 'backgroundColor': '#f1f8e9', 'padding': '10px', 'borderRadius': '5px'})
+        )
+    return None, html.Div('')
 
 # Callback pour générer les diagrammes
 @app.callback(
